@@ -17,14 +17,15 @@ class FeedForward(nn.Module):
 
 ### Box for simple self-attention
 class SimpleAttention(nn.Module):
-    def __init__(self, cfg):
+    def __init__(self, d_in, d_out, context_length, dropout, qkv_bias=False):
         super().__init__()
-        self.W_q = nn.Linear(cfg["emb_dim"], cfg["emb_dim"])
-        self.W_k = nn.Linear(cfg["emb_dim"], cfg["emb_dim"])
-        self.W_v = nn.Linear(cfg["emb_dim"], cfg["emb_dim"])
-        self.dropout = nn.Dropout(cfg["dropout_rate"])
+
+        self.W_q = nn.Linear(d_in, d_out, bias=qkv_bias)
+        self.W_k = nn.Linear(d_in, d_out, bias=qkv_bias)
+        self.W_v = nn.Linear(d_in, d_out, bias=qkv_bias)
+        self.dropout = nn.Dropout(dropout)
         self.register_buffer(
-            'mask', torch.triu(torch.ones(cfg["context_length"], cfg["context_length"]), diagonal=1)
+            'mask', torch.triu(torch.ones(context_length, context_length), diagonal=1)
             ) # creates an upper triangular matrix
 
 
@@ -45,11 +46,19 @@ class SimpleAttention(nn.Module):
 
 ### Naive Multi-Head Attention box
 class NaiveMultiHeadAttention(nn.Module):
-    def __init__(self, cfg):
+    def __init__(self, d_in, d_out, context_length, dropout, num_heads, qkv_bias=False):
         super().__init__()
+        assert (d_out % num_heads == 0), \
+            "d_out must be divisible by num_heads"
+        
+        self.heads = nn.ModuleList([
+            SimpleAttention(d_in, d_out // num_heads, context_length, dropout, qkv_bias) for _ in range(num_heads)
+        ])
+        self.out_proj = nn.Linear(d_in, d_out)
+        
 
     def forward(self, x):
-        return x
+        return self.out_proj(torch.cat([head(x) for head in self.heads], dim=-1))
 
 
 ### MHA box
@@ -65,7 +74,21 @@ class TransformerBlock(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.layernorm1 = nn.LayerNorm(cfg["emb_dim"])
-        self.attention = SimpleAttention(cfg)
+        # self.attention = SimpleAttention(
+        #                     d_in=cfg["emb_dim"],
+        #                     d_out=cfg["emb_dim"],
+        #                     context_length=cfg["context_length"],
+        #                     dropout=cfg["dropout_rate"],
+        #                     qkv_bias=cfg["qkv_bias"],
+        #                 )
+        self.attention = NaiveMultiHeadAttention(
+                            d_in=cfg["emb_dim"],
+                            d_out=cfg["emb_dim"], 
+                            context_length=cfg["context_length"], 
+                            dropout=cfg["dropout_rate"], 
+                            num_heads=cfg["num_heads"], 
+                            qkv_bias=cfg["qkv_bias"]
+                        )
         # self.attention = MultiHeadAttention(cfg)
         self.dropout = nn.Dropout(cfg["dropout_rate"])
         self.layernorm2 = nn.LayerNorm(cfg["emb_dim"])
