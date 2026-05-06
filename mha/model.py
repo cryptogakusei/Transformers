@@ -30,9 +30,9 @@ class SimpleAttention(nn.Module):
 
 
     def forward(self, x):
-        _, seq_len, _ = x.shape
+        _, seq_len, _ = x.shape # batch_size x seq_len x d_in
 
-        queries = self.W_q(x) # batch_size x seq_len x emb_dim
+        queries = self.W_q(x) # batch_size x seq_len x d_out
         keys = self.W_k(x) # -- same here --
         values = self.W_v(x) # -- same here --
 
@@ -40,7 +40,7 @@ class SimpleAttention(nn.Module):
         scores.masked_fill_(self.mask.bool()[:seq_len, :seq_len], -torch.inf) # -- same here --
         weights = torch.softmax(scores / keys.shape[-1]**0.5, dim=-1) # -- same here --
         weights = self.dropout(weights) # -- same here --
-        output = weights @ values
+        output = weights @ values # batch_size x seq_len x d_out
         return output
 
 
@@ -48,12 +48,14 @@ class SimpleAttention(nn.Module):
 class NaiveMultiHeadAttention(nn.Module):
     def __init__(self, d_in, d_out, context_length, dropout, num_heads, qkv_bias=False):
         super().__init__()
-        assert (d_out % num_heads == 0), \
-            "d_out must be divisible by num_heads"
-        
+        assert (d_out % num_heads == 0), "d_out must be divisible by num_heads"
         self.heads = nn.ModuleList([
-            SimpleAttention(d_in, d_out // num_heads, context_length, dropout, qkv_bias) for _ in range(num_heads)
-        ])
+                            SimpleAttention(d_in, 
+                                            d_out // num_heads, 
+                                            context_length, 
+                                            dropout, 
+                                            qkv_bias) for _ in range(num_heads)
+                        ])
         self.out_proj = nn.Linear(d_in, d_out)
         
 
@@ -61,13 +63,50 @@ class NaiveMultiHeadAttention(nn.Module):
         return self.out_proj(torch.cat([head(x) for head in self.heads], dim=-1))
 
 
-### MHA box
+### An optimized Multi-head attention box
 class MultiHeadAttention(nn.Module):
-    def __init__(self, cfg):
+    def __init__(self, d_in, d_out, context_length, dropout, num_heads, qkv_bias=False):
         super().__init__()
+        assert (d_out % num_heads == 0), "d_out must be divisible by num_heads"
+
+        self.d_out = d_out
+        self.num_heads = num_heads
+        self.head_dim = d_out // num_heads
+        self.W_q = nn.Linear(d_in, d_out, bias=qkv_bias)
+        self.W_k = nn.Linear(d_in, d_out, bias=qkv_bias)
+        self.W_v = nn.Linear(d_in, d_out, bias=qkv_bias)
+        self.out_proj = nn.Linear(d_in, d_out)
+        self.dropout = nn.Dropout(dropout)
+        self.register_buffer(
+            'mask', torch.triu(torch.ones(context_length, context_length), diagonal=1)
+            ) # creates an upper triangular matrix
+        
 
     def forward(self, x):
-        return x
+        batch_size, seq_len, d_in = x.shape # batch_size x seq_len x d_in
+
+        queries = self.W_q(x) # batch_size x seq_len x d_out
+        keys = self.W_k(x) # -- same here --
+        values = self.W_v(x) # -- same here --
+
+        # break the last dimension across heads
+        keys = keys.view(batch_size, seq_len, self.num_heads, self.head_dim) # batch_size x seq_len x num_heads x head_dim
+        values = values.view(batch_size, seq_len, self.num_heads, self.head_dim) # batch_size x seq_len x num_heads x head_dim
+        queries = queries.view(batch_size, seq_len, self.num_heads, self.head_dim) # batch_size x seq_len x num_heads x head_dim
+        
+        # prepare the matrices for matmul by rearranging dimensions
+        keys = keys.transpose(1, 2) # batch_size x seq_len x num_heads x head_dim ---> # batch_size x num_heads x seq_len x head_dim
+        values = values.transpose(1, 2) # batch_size x seq_len x num_heads x head_dim ---> # batch_size x num_heads x seq_len x head_dim
+        queries = queries.transpose(1, 2) # batch_size x seq_len x num_heads x head_dim ---> # batch_size x num_heads x seq_len x head_dim
+        scores = keys @ values.transpose(2, 3) # batch_size x num_heads x seq_len x seq_len
+        scores.masked_fill_(self.mask.bool()[:seq_len, :seq_len], -torch.inf) # -- same here --
+        weights = torch.softmax(scores / keys.shape[-1]**0.5, dim=-1) # -- same here --
+        weights = self.dropout(weights) # -- same here --
+        output = (weights @ values).transpose(2, 3) # batch_size x num_heads x seq_len x head_dim ---> # batch_size x seq_len x num_heads x head_dim
+        output = output.contiguous().view(batch_size, seq_len, self.d_out) # batch_size x seq_len x d_out
+        output = self.out_proj(output)
+
+        return output
 
 
 class TransformerBlock(nn.Module):
@@ -81,7 +120,15 @@ class TransformerBlock(nn.Module):
         #                     dropout=cfg["dropout_rate"],
         #                     qkv_bias=cfg["qkv_bias"],
         #                 )
-        self.attention = NaiveMultiHeadAttention(
+        # self.attention = NaiveMultiHeadAttention(
+        #                     d_in=cfg["emb_dim"],
+        #                     d_out=cfg["emb_dim"], 
+        #                     context_length=cfg["context_length"], 
+        #                     dropout=cfg["dropout_rate"], 
+        #                     num_heads=cfg["num_heads"], 
+        #                     qkv_bias=cfg["qkv_bias"]
+        #                 )
+        self.attention = MultiHeadAttention(
                             d_in=cfg["emb_dim"],
                             d_out=cfg["emb_dim"], 
                             context_length=cfg["context_length"], 
@@ -89,7 +136,6 @@ class TransformerBlock(nn.Module):
                             num_heads=cfg["num_heads"], 
                             qkv_bias=cfg["qkv_bias"]
                         )
-        # self.attention = MultiHeadAttention(cfg)
         self.dropout = nn.Dropout(cfg["dropout_rate"])
         self.layernorm2 = nn.LayerNorm(cfg["emb_dim"])
         self.feedforward = FeedForward(cfg)
