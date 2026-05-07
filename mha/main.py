@@ -6,8 +6,9 @@ import tiktoken
 import matplotlib.pyplot as plt
 
 from config import MODEL_CONFIG, TRAINING_CONFIG
-from utils import create_dataloader, train
+from utils import create_dataloader, train, plot_losses, plot_all_attention, text_to_token_ids, token_ids_to_text
 from model import MHAModel
+from model_interp import MHAModelInterpretability
 
 torch.manual_seed(123) # initializing randomness
 
@@ -72,7 +73,24 @@ for x, y in val_loader:
 
 
 ### Training
-model = MHAModel(MODEL_CONFIG)
+# without interpretability -- uncomment below when you don;t want interpretability
+# model = MHAModel(MODEL_CONFIG)
+# model.to(device)
+# optimizer = torch.optim.AdamW(model.parameters(), lr=0.0004, weight_decay=0.1)
+# train_losses, val_losses, tokens_seen = train(
+#                                             model, train_loader, val_loader, optimizer, device,
+#                                             num_epochs=TRAINING_CONFIG["num_epochs"], 
+#                                             eval_freq=TRAINING_CONFIG["eval_freq"], 
+#                                             eval_num_batches=TRAINING_CONFIG["eval_num_batches"],
+#                                             start_context="Every effort moves you", 
+#                                             tokenizer=tokenizer
+#                                         )
+# epochs_tensor = torch.linspace(0, TRAINING_CONFIG["num_epochs"], len(train_losses))
+# plot_losses(epochs_tensor, tokens_seen, train_losses, val_losses)
+
+
+# with interpretabiity -- uncomment below when you want interpretability
+model = MHAModelInterpretability(MODEL_CONFIG)
 model.to(device)
 optimizer = torch.optim.AdamW(model.parameters(), lr=0.0004, weight_decay=0.1)
 train_losses, val_losses, tokens_seen = train(
@@ -83,5 +101,18 @@ train_losses, val_losses, tokens_seen = train(
                                             start_context="Every effort moves you", 
                                             tokenizer=tokenizer
                                         )
+epochs_tensor = torch.linspace(0, TRAINING_CONFIG["num_epochs"], len(train_losses))
+plot_losses(epochs_tensor, tokens_seen, train_losses, val_losses)
 
+print("start eval...")
+model.eval()
+text = "Every effort moves you incrementally."
+token_ids = text_to_token_ids(text, tokenizer).to(device)
+tokens = [tokenizer.decode([t]) for t in token_ids[0].tolist()]
 
+with torch.no_grad():
+    logits, all_attention = model(token_ids, return_attention=True)
+
+print("Starting attention plotting...")
+plot_all_attention(all_attention, tokens)
+print("Done!")

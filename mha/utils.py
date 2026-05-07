@@ -1,5 +1,8 @@
 import torch
 from torch.utils.data import Dataset, DataLoader 
+import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
+import os
 
 
 
@@ -143,3 +146,36 @@ def train(model, train_loader, val_loader, optimizer,
         generate_and_print_sample(model, tokenizer, device, start_context)
     return train_losses, val_losses, track_tokens_seen
  
+
+### Plotting functions 
+def plot_losses(epochs_seen, tokens_seen, train_losses, val_losses):
+    fig, ax1 = plt.subplots(figsize=(5, 3))
+    ax1.plot(epochs_seen, train_losses, label="Training loss")
+    ax1.plot(epochs_seen, val_losses, linestyle="-.", label="Validation loss")
+    ax1.set_xlabel("Epochs")
+    ax1.set_ylabel("Loss")
+    ax1.legend(loc="upper right")
+    ax1.xaxis.set_major_locator(MaxNLocator(integer=True))
+    ax2 = ax1.twiny()
+    ax2.plot(tokens_seen, train_losses, alpha=0)
+    ax2.set_xlabel("Tokens seen")
+    fig.tight_layout()
+    os.makedirs("figs", exist_ok=True)
+    fig.savefig("figs/losses.png", dpi=150, bbox_inches="tight")
+    plt.close()
+
+
+def plot_all_attention(all_attention, tokens):
+    os.makedirs("figs/attention", exist_ok=True)
+    n_layers = len(all_attention)
+    n_heads = all_attention[0].shape[1]
+    for layer in range(n_layers):
+        for head in range(n_heads):
+            save_path = f"figs/attention/layer_{layer}_head_{head}.png"
+            attention = all_attention[layer][0, head].cpu().numpy()
+            fig, ax = plt.subplots(figsize=(6, 6))
+            im = ax.imshow(attention, cmap='viridis')
+            plt.colorbar(im)
+            plt.title(f"Layer {layer}, Head {head}")
+            plt.savefig(save_path, dpi=100)
+            plt.close()
