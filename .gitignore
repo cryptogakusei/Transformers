@@ -1,2 +1,5 @@
 exercises_from_book
 .DS_Store
+*.pth
+figs/
+file.txt
