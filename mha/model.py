@@ -56,7 +56,7 @@ class NaiveMultiHeadAttention(nn.Module):
                                             dropout, 
                                             qkv_bias) for _ in range(num_heads)
                         ])
-        self.out_proj = nn.Linear(d_in, d_out)
+        self.out_proj = nn.Linear(d_out, d_out)
         
 
     def forward(self, x):
@@ -75,7 +75,7 @@ class MultiHeadAttention(nn.Module):
         self.W_q = nn.Linear(d_in, d_out, bias=qkv_bias)
         self.W_k = nn.Linear(d_in, d_out, bias=qkv_bias)
         self.W_v = nn.Linear(d_in, d_out, bias=qkv_bias)
-        self.out_proj = nn.Linear(d_in, d_out)
+        self.out_proj = nn.Linear(d_out, d_out)
         self.dropout = nn.Dropout(dropout)
         self.register_buffer(
             'mask', torch.triu(torch.ones(context_length, context_length), diagonal=1)

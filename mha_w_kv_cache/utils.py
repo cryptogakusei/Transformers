@@ -115,6 +115,27 @@ def generate_and_print_sample(model, tokenizer, device, start_context):
     model.train()
 
 
+def generate_with_kv_cache(model, idx,  max_new_tokens, context_size):
+    model.eval()
+    model.clear_cache()
+
+    for i in range(idx.shape[1]):
+        logits = model(idx[:, i:i+1])
+    logits = logits[:, -1, :]
+    probas = torch.softmax(logits, dim=-1) # only for the the first new token generated
+    idx_next = torch.argmax(probas,dim=-1, keepdim=True)
+    idx = torch.cat((idx, idx_next), dim=-1)
+
+    for _ in range(max_new_tokens-1):
+        logits = model(idx_next)
+        logits = logits[:, -1, :]
+        probas = torch.softmax(logits, dim=-1)
+        idx_next = torch.argmax(probas,dim=-1, keepdim=True)
+        idx = torch.cat((idx, idx_next), dim=-1)
+
+    return idx
+
+
 
 ### Train the model
 def train(model, train_loader, val_loader, optimizer, 
@@ -160,7 +181,6 @@ def plot_losses(epochs_seen, tokens_seen, train_losses, val_losses):
     ax2.plot(tokens_seen, train_losses, alpha=0)
     ax2.set_xlabel("Tokens seen")
     fig.tight_layout()
-    plt.show()
     os.makedirs("figs", exist_ok=True)
     fig.savefig("figs/losses.png", dpi=150, bbox_inches="tight")
-    plt.show()
+    plt.close()

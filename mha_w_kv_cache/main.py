@@ -4,10 +4,12 @@ import torch
 import torch.nn as nn
 import tiktoken
 import matplotlib.pyplot as plt
+import time
 
 from config import MODEL_CONFIG, TRAINING_CONFIG
-from utils import create_dataloader, train, plot_losses
+from utils import create_dataloader, train, plot_losses, text_to_token_ids, token_ids_to_text, generate_text_simple, generate_with_kv_cache
 from model import MHAModel
+from inference import MHAModelKV
 
 torch.manual_seed(123) # initializing randomness
 
@@ -85,4 +87,35 @@ train_losses, val_losses, tokens_seen = train(
                                         )
 epochs_tensor = torch.linspace(0, TRAINING_CONFIG["num_epochs"], len(train_losses))
 plot_losses(epochs_tensor, tokens_seen, train_losses, val_losses)
+torch.save(model.state_dict(), "model_weights.pth")
 
+
+prompt = "Every effort moves you"
+token_ids = text_to_token_ids(prompt, tokenizer).to(device)
+max_new_tokens = 500
+
+# Inference without KV cache
+model.eval()
+with torch.no_grad():
+    start = time.time()
+    output1 = generate_text_simple(model, token_ids, max_new_tokens, MODEL_CONFIG["context_length"])
+    end = time.time()
+print(f"Without KV cache: {end - start:.3f}s")
+
+# Inference with KV cache
+kv_model = MHAModelKV(MODEL_CONFIG)
+kv_model.load_state_dict(torch.load("model_weights.pth"))
+kv_model.to(device)
+kv_model.eval()
+with torch.no_grad():
+    start = time.time()
+    output2 = generate_with_kv_cache(kv_model, token_ids, max_new_tokens=50, context_size=MODEL_CONFIG["context_length"])
+    end = time.time()
+print(f"With KV cache: {end - start:.3f}s")
+
+print(f"Outputs match: {torch.equal(output1, output2)}")
+print(token_ids_to_text(output2, tokenizer))
+
+size = kv_model.get_total_kv_cache_size()
+print(f"KV cache size: {size / 1024:.1f} KB ({size / (1024*1024):.2f} MB)")
+kv_model.clear_cache()

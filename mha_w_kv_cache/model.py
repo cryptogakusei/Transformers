@@ -56,7 +56,7 @@ class NaiveMultiHeadAttention(nn.Module):
                                             dropout, 
                                             qkv_bias) for _ in range(num_heads)
                         ])
-        self.out_proj = nn.Linear(d_in, d_out)
+        self.out_proj = nn.Linear(d_out, d_out)
         
 
     def forward(self, x):
@@ -75,7 +75,7 @@ class MultiHeadAttention(nn.Module):
         self.W_q = nn.Linear(d_in, d_out, bias=qkv_bias)
         self.W_k = nn.Linear(d_in, d_out, bias=qkv_bias)
         self.W_v = nn.Linear(d_in, d_out, bias=qkv_bias)
-        self.out_proj = nn.Linear(d_in, d_out)
+        self.out_proj = nn.Linear(d_out, d_out)
         self.dropout = nn.Dropout(dropout)
         self.register_buffer(
             'mask', torch.triu(torch.ones(context_length, context_length), diagonal=1)
@@ -98,12 +98,12 @@ class MultiHeadAttention(nn.Module):
         keys = keys.transpose(1, 2) # batch_size x seq_len x num_heads x head_dim ---> # batch_size x num_heads x seq_len x head_dim
         values = values.transpose(1, 2) # batch_size x seq_len x num_heads x head_dim ---> # batch_size x num_heads x seq_len x head_dim
         queries = queries.transpose(1, 2) # batch_size x seq_len x num_heads x head_dim ---> # batch_size x num_heads x seq_len x head_dim
-        scores = queries @ keys.transpose(2, 3) # batch_size x num_heads x seq_len x seq_len
-        scores = scores / keys.shape[-1]**0.5 # -- same here --
-        scores.masked_fill_(self.mask.bool()[:seq_len, :seq_len], -torch.inf) # -- same here --
-        weights = torch.softmax(scores, dim=-1) # -- same here --
-        weights = self.dropout(weights) # -- same here --
-        output = (weights @ values).transpose(1, 2) # batch_size x num_heads x seq_len x head_dim ---> # batch_size x seq_len x num_heads x head_dim
+        attention = queries @ keys.transpose(2, 3) # batch_size x num_heads x seq_len x seq_len
+        attention = attention / keys.shape[-1]**0.5 # -- same here --
+        attention.masked_fill_(self.mask.bool()[:seq_len, :seq_len], -torch.inf) # -- same here --
+        attention = torch.softmax(attention, dim=-1) # -- same here --
+        attention = self.dropout(attention) # -- same here --
+        output = (attention @ values).transpose(1, 2) # batch_size x num_heads x seq_len x head_dim ---> # batch_size x seq_len x num_heads x head_dim
         output = output.contiguous().view(batch_size, seq_len, self.d_out) # batch_size x seq_len x d_out
         output = self.out_proj(output)
 
@@ -114,21 +114,6 @@ class TransformerBlock(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.layernorm1 = nn.LayerNorm(cfg["emb_dim"])
-        # self.attention = SimpleAttention(
-        #                     d_in=cfg["emb_dim"],
-        #                     d_out=cfg["emb_dim"],
-        #                     context_length=cfg["context_length"],
-        #                     dropout=cfg["dropout_rate"],
-        #                     qkv_bias=cfg["qkv_bias"],
-        #                 )
-        # self.attention = NaiveMultiHeadAttention(
-        #                     d_in=cfg["emb_dim"],
-        #                     d_out=cfg["emb_dim"], 
-        #                     context_length=cfg["context_length"], 
-        #                     dropout=cfg["dropout_rate"], 
-        #                     num_heads=cfg["num_heads"], 
-        #                     qkv_bias=cfg["qkv_bias"]
-        #                 )
         self.attention = MultiHeadAttention(
                             d_in=cfg["emb_dim"],
                             d_out=cfg["emb_dim"], 
