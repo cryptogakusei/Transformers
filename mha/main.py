@@ -29,7 +29,7 @@ tokenizer = tiktoken.get_encoding("gpt2")
 # urllib.request.urlretrieve(TRAINING_CONFIG["url"], file_path)
 # with open(file_path, "r", encoding="utf-8") as f:
 #     raw_data = f.read()
-ds = load_dataset(TRAINING_CONFIG["dataset"], split="train[:5000]")
+ds = load_dataset(TRAINING_CONFIG["dataset"], split="train[:500000]")
 raw_data = "\n".join(ds["text"])
 
 # print #
