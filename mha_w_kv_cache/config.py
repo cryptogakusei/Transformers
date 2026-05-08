@@ -14,12 +14,13 @@ MODEL_CONFIG = {
 
 # Training configuration
 TRAINING_CONFIG = {
-    "url" : "https://raw.githubusercontent.com/rasbt/LLMs-from-scratch/main/ch02/01_main-chapter-code/the-verdict.txt",
-    "train_ratio" : 0.9,
-    "num_epochs" : 10,
-    "batch_size" : 2,
-    "eval_freq" : 5, # how frequently evaluation to be run
-    "eval_num_batches" : 5, # number of batches to run evaluation over at each go
+    # "url" : "https://raw.githubusercontent.com/rasbt/LLMs-from-scratch/main/ch02/01_main-chapter-code/the-verdict.txt",
+    "dataset" : "roneneldan/TinyStories",
+    "train_ratio" : 0.95,
+    "num_epochs" : 1,
+    "batch_size" : 16,
+    "eval_freq" : 500, # how frequently evaluation to be run
+    "eval_num_batches" : 20, # number of batches to run evaluation over at each go
 }
 
 

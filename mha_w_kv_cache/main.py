@@ -5,6 +5,7 @@ import torch.nn as nn
 import tiktoken
 import matplotlib.pyplot as plt
 import time
+from datasets import load_dataset
 
 from config import MODEL_CONFIG, TRAINING_CONFIG
 from utils import create_dataloader, train, plot_losses, text_to_token_ids, token_ids_to_text, generate_text_simple, generate_with_kv_cache
@@ -25,10 +26,12 @@ tokenizer = tiktoken.get_encoding("gpt2")
 
 
 ### Preprocessing the input data 
-file_path = "file.txt"
-urllib.request.urlretrieve(TRAINING_CONFIG["url"], file_path)
-with open(file_path, "r", encoding="utf-8") as f:
-    raw_data = f.read()
+# file_path = "file.txt"
+# urllib.request.urlretrieve(TRAINING_CONFIG["url"], file_path)
+# with open(file_path, "r", encoding="utf-8") as f:
+#     raw_data = f.read()
+ds = load_dataset(TRAINING_CONFIG["dataset"], split="train[:500000]")
+raw_data = "\n".join(ds["text"])
 
 # print #
 total_tokens = len(tokenizer.encode(raw_data))
