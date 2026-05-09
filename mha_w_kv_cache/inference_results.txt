@@ -1,0 +1,91 @@
+Max new tokens: 500
+Context length: 256
+Device: mps
+
+Without KV cache: 7.806s
+Generated:
+Every effort moves you?"
+
+"Yes--quite insensible to the irony. She wanted him vindicated--and by me!"
+
+He laughed again, and threw back his head to look up at the sketch of the donkey. "There were days when I couldn't look at that thing--the only object breaking the plain oak panelling of the room.
+
+"Oh, by Jove!" I said.
+
+It was a sketch of the donkey--an old tired donkey, I had a feather.
+"Oh, I had not to see it back to the easel.
+
+
+He was silent; but I felt him close behind me, breathing a little quickly.
+
+"What a wonder! Made with a dozen lines--but on everlasting foundations.
+"Oh, it became apparent that he was fond of Mrs. "The last but one," she corrected herself--"I'd rather like to tell you--because I've always suspected you of loathing my work."
+
+I made a deprecating gesture, he had a curious smile in his eyes.
+
+"Oh, I knew him, I didn't care a straw when I painted; and as he lay there and watched me, the ensuing weeks, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been
+
+With KV cache: 4.031s | Cache: 18432.0 KB
+Generated:
+Every effort moves you?"
+
+"Yes--quite insensible to the irony. She wanted him vindicated--and by me!"
+
+He laughed again, and threw back his head to look up at the sketch of the donkey. "There were days when I couldn't look at that thing--the only object breaking the plain oak panelling of the room.
+
+"Oh, by Jove!" I said.
+
+It was a sketch of the donkey--an old tired donkey, I had a feather.
+"Oh, I had not to see it back to the easel.
+
+
+He was silent; but I felt him close behind me, breathing a little quickly.
+
+"What a wonder! Made with a dozen lines--but on everlasting foundations.
+"Oh, it became apparent that he was fond of Mrs. "The last but one," she corrected herself--"I'd rather like to tell you--because I've always suspected you of loathing my work."
+
+I made a deprecating gesture, he had a curious smile in his eyes.
+
+"Oh, I knew him, I didn't care a straw when I painted; and as he lay there and watched me, the ensuing weeks, I had a neutral surface to work on--forming, as it were the irony. She wanted him vindicated--and by me!"
+
+He laughed again, and threw back his glory, he had dropped his painting, I had been dead."
+"Oh, and then beneath the picture.
+
+"How it happened? I can tell you in five minutes--and it didn't take much longer to happen. . . . I had sent all my traps in advance, and I had only to set up the easel and get to work. He had been dead only twenty-four hours, he resented the tone. I had gone with the stream, echoed the usual platitudes about him, till I half got to think he was a dozen lines--but on everlasting foundations. Thwing had predicted, the price of "Gisburns" went up.
+"I was not to see her absurdity. It was his own absurdity he was the last thing he had done--just a note taken with a shaking hand, when he was down in Devonshire recovering from a previous heart attack. . . She sent for me to paint him when he was dead."
+
+"When he was dead? You
+
+With optimized KV cache: 3.948s | Cache: 294912.0 KB
+Generated:
+Every effort moves you?"
+
+"Yes--quite insensible to the irony. She wanted him vindicated--and by me!"
+
+He laughed again, and threw back his head to look up at the sketch of the donkey. "There were days when I couldn't look at that thing--the only object breaking the plain oak panelling of the room.
+
+"Oh, by Jove!" I said.
+
+It was a sketch of the donkey--an old tired donkey, I had a feather.
+"Oh, I had not to see it back to the easel.
+
+
+He was silent; but I felt him close behind me, breathing a little quickly.
+
+"What a wonder! Made with a dozen lines--but on everlasting foundations.
+"Oh, it became apparent that he was fond of Mrs. "The last but one," she corrected herself--"I'd rather like to tell you--because I've always suspected you of loathing my work."
+
+I made a deprecating gesture, he had a curious smile in his eyes.
+
+"Oh, I knew him, I didn't care a straw when I painted; and as he lay there and watched me, the ensuing weeks, I had a neutral surface to work on--forming, as it were the irony. She wanted him vindicated--and by me!"
+
+He laughed again, and threw back his glory, he had dropped his painting, I had been dead."
+"Oh, and then beneath the picture.
+
+"How it happened? I can tell you in five minutes--and it didn't take much longer to happen. . . . I had sent all my traps in advance, and I had only to set up the easel and get to work. He had been dead only twenty-four hours, he resented the tone. I had gone with the stream, echoed the usual platitudes about him, till I half got to think he was a dozen lines--but on everlasting foundations. Thwing had predicted, the price of "Gisburns" went up.
+"I was not to see her absurdity. It was his own absurdity he was the last thing he had done--just a note taken with a shaking hand, when he was down in Devonshire recovering from a previous heart attack. . . She sent for me to paint him when he was dead."
+
+"When he was dead? You
+
+Speedup KV vs No KV: 1.94x
+Speedup Optimized KV vs No KV: 1.98x

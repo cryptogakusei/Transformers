@@ -8,9 +8,10 @@ import time
 from datasets import load_dataset
 
 from config import MODEL_CONFIG, TRAINING_CONFIG
-from utils import create_dataloader, train, plot_losses, text_to_token_ids, token_ids_to_text, generate_text_simple, generate_with_kv_cache
+from utils import create_dataloader, train, plot_losses, text_to_token_ids, token_ids_to_text, generate_text_simple, generate_with_kv_cache, sync
 from model import MHAModel
 from inference import MHAModelKV
+from inference_with_optimized_kv_cache import MHAModelOptimizedKV
 
 torch.manual_seed(123) # initializing randomness
 
@@ -100,10 +101,14 @@ max_new_tokens = 500
 # Inference without KV cache
 model.eval()
 with torch.no_grad():
+    sync()
     start = time.time()
     output1 = generate_text_simple(model, token_ids, max_new_tokens, MODEL_CONFIG["context_length"])
+    sync()
     end = time.time()
-print(f"Without KV cache: {end - start:.3f}s")
+t1 = end - start
+text1 = token_ids_to_text(output1, tokenizer)
+print(f"Without KV cache: {t1:.3f}s")
 
 # Inference with KV cache
 kv_model = MHAModelKV(MODEL_CONFIG)
@@ -111,14 +116,55 @@ kv_model.load_state_dict(torch.load("model_weights.pth"))
 kv_model.to(device)
 kv_model.eval()
 with torch.no_grad():
+    sync()
     start = time.time()
-    output2 = generate_with_kv_cache(kv_model, token_ids, max_new_tokens=50, context_size=MODEL_CONFIG["context_length"])
+    output2 = generate_with_kv_cache(kv_model, token_ids, max_new_tokens, context_size=MODEL_CONFIG["context_length"])
+    sync()
     end = time.time()
-print(f"With KV cache: {end - start:.3f}s")
-
-print(f"Outputs match: {torch.equal(output1, output2)}")
-print(token_ids_to_text(output2, tokenizer))
-
-size = kv_model.get_total_kv_cache_size()
-print(f"KV cache size: {size / 1024:.1f} KB ({size / (1024*1024):.2f} MB)")
+t2 = end - start
+text2 = token_ids_to_text(output2, tokenizer)
+size2 = kv_model.get_total_kv_cache_size()
+print(f"With KV cache: {t2:.3f}s | Cache: {size2/1024:.1f} KB")
 kv_model.clear_cache()
+
+# Inference with optimized KV cache
+optimized_kv_model = MHAModelOptimizedKV(MODEL_CONFIG)
+optimized_kv_model.load_state_dict(torch.load("model_weights.pth"))
+optimized_kv_model.to(device)
+for block in optimized_kv_model.blocks:
+    block.attention.kv_cache.K_cache = block.attention.kv_cache.K_cache.to(device)
+    block.attention.kv_cache.V_cache = block.attention.kv_cache.V_cache.to(device)
+optimized_kv_model.eval()
+with torch.no_grad():
+    sync()
+    start = time.time()
+    output3 = generate_with_kv_cache(optimized_kv_model, token_ids, max_new_tokens, context_size=MODEL_CONFIG["context_length"])
+    sync()
+    end = time.time()
+t3 = end - start
+text3 = token_ids_to_text(output3, tokenizer)
+size3 = optimized_kv_model.get_total_kv_cache_size()
+print(f"With optimized KV cache: {t3:.3f}s | Cache: {size3/1024:.1f} KB")
+optimized_kv_model.clear_cache()
+
+print(f"\nSpeedup KV vs No KV: {t1/t2:.2f}x")
+print(f"Speedup Optimized KV vs No KV: {t1/t3:.2f}x")
+
+with open("inference_results.txt", "w") as f:
+    f.write(f"Max new tokens: {max_new_tokens}\n")
+    f.write(f"Context length: {MODEL_CONFIG['context_length']}\n")
+    f.write(f"Device: {device}\n\n")
+    
+    f.write(f"Without KV cache: {t1:.3f}s\n")
+    f.write(f"Generated:\n{text1}\n\n")
+    
+    f.write(f"With KV cache: {t2:.3f}s | Cache: {size2/1024:.1f} KB\n")
+    f.write(f"Generated:\n{text2}\n\n")
+    
+    f.write(f"With optimized KV cache: {t3:.3f}s | Cache: {size3/1024:.1f} KB\n")
+    f.write(f"Generated:\n{text3}\n\n")
+    
+    f.write(f"Speedup KV vs No KV: {t1/t2:.2f}x\n")
+    f.write(f"Speedup Optimized KV vs No KV: {t1/t3:.2f}x\n")
+
+print("Results saved to inference_results.txt")

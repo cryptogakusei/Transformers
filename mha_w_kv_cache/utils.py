@@ -184,3 +184,10 @@ def plot_losses(epochs_seen, tokens_seen, train_losses, val_losses):
     os.makedirs("figs", exist_ok=True)
     fig.savefig("figs/losses.png", dpi=150, bbox_inches="tight")
     plt.close()
+
+
+
+### sync function for cuda
+def sync():
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()

@@ -2,37 +2,39 @@ import torch
 import torch.nn as nn
 
 ### KV Cache - define it for one per layer
-class KVCache:
-    def __init__(self, context_length):
-        self.K_cache = None
-        self.V_cache = None
+class OptimizedKVCache:
+    # CAVEAT: built for batch size of 1 and for inserting 1 new token
+    def __init__(self, context_length, max_seq_len_kv_cache, num_heads, head_dim):
+        self.K_cache = torch.empty(1, num_heads, max_seq_len_kv_cache, head_dim)
+        self.V_cache = torch.empty(1, num_heads, max_seq_len_kv_cache, head_dim)
         self.context_length = context_length
-    
+        self.pos = 0 # always indicates index where next token(s) were to be cached
+        self.max_seq_len = max_seq_len_kv_cache
+
     def cache(self, K_new, V_new):
-        if self.K_cache is None:
-            self.K_cache = K_new # batch_size x num_heads x 1 x head_dim
-            self.V_cache = V_new # batch_size x num_heads x 1 x head_dim
-        else:
-            self.K_cache = torch.cat([self.K_cache, K_new], dim=2) # batch_size x num_heads x min(tokens_seen_so_far, context_length) x head_dim
-            self.V_cache = torch.cat([self.V_cache, V_new], dim=2) # batch_size x num_heads x min(tokens_seen_so_far, context_length) x head_dim
-        
-        if self.K_cache.shape[2] > self.context_length:
-            self.K_cache = self.K_cache[:,:, -self.context_length:, :] # cap at context_length
-            self.V_cache = self.V_cache[:,:, -self.context_length:, :] 
+        # K_new and V_new are assumed to add only one new token in the sequence
+        if self.pos >= self.max_seq_len:
+            self.K_cache[:,:,:-1,:] = self.K_cache[:,:,1:,:]
+            self.V_cache[:,:,:-1,:] = self.V_cache[:,:,1:,:]
+            self.pos = self.max_seq_len - 1
+        self.K_cache[:,:,self.pos,:] = K_new.squeeze(2) # dim(K_new) = 1 x num_heads x 1 x head_dim --> 1 x num_heads x head_dim --> insertion to K_cache
+        self.V_cache[:,:,self.pos,:] = V_new.squeeze(2) # -- same as above --
+        self.pos += 1
 
     def get_cache(self):
-        return self.K_cache, self.V_cache 
-    
+        start_pos = max(0, self.pos - self.context_length) # only send back the last context_length -- for orange-to-orange comparison of speedup with non KV cache
+        return self.K_cache[:,:,start_pos:self.pos,:], self.V_cache[:,:,start_pos:self.pos,:] 
+        
     def clear_cache(self):
-        self.K_cache = None
-        self.V_cache = None
+        self.K_cache.zero_()
+        self.V_cache.zero_()
+        self.pos = 0
 
     def get_size_bytes(self):
-        if self.K_cache is None:
-            return 0
-        return self.K_cache.element_size() * self.K_cache.nelement() + self.V_cache.element_size() * self.V_cache.nelement()
-    
+        return self.K_cache.element_size() * self.K_cache.nelement() + \
+               self.V_cache.element_size() * self.V_cache.nelement()
 
+    
 
 ### Feedforward box
 class FeedForward(nn.Module):
@@ -49,7 +51,7 @@ class FeedForward(nn.Module):
 
 ### An optimized Multi-head attention box
 class MultiHeadAttention(nn.Module):
-    def __init__(self, d_in, d_out, context_length, dropout, num_heads, qkv_bias=False):
+    def __init__(self, d_in, d_out, context_length, dropout, num_heads, max_seq_len_kv_cache, qkv_bias=False):
         super().__init__()
         assert (d_out % num_heads == 0), "d_out must be divisible by num_heads"
 
@@ -64,7 +66,7 @@ class MultiHeadAttention(nn.Module):
         self.register_buffer(
             'mask', torch.triu(torch.ones(context_length, context_length), diagonal=1)
             ) # creates an upper triangular matrix
-        self.kv_cache = KVCache(context_length)
+        self.kv_cache = OptimizedKVCache(context_length, max_seq_len_kv_cache, self.num_heads, self.head_dim)
 
     def forward(self, x):
         batch_size, seq_len, d_in = x.shape # batch_size x 1 x d_in
@@ -109,7 +111,8 @@ class TransformerBlock(nn.Module):
                             d_out=cfg["emb_dim"], 
                             context_length=cfg["context_length"], 
                             dropout=cfg["dropout_rate"], 
-                            num_heads=cfg["num_heads"], 
+                            num_heads=cfg["num_heads"],
+                            max_seq_len_kv_cache = cfg["max_seq_len_kv_cache"], 
                             qkv_bias=cfg["qkv_bias"]
                         )
         self.dropout = nn.Dropout(cfg["dropout_rate"])
@@ -132,7 +135,7 @@ class TransformerBlock(nn.Module):
         return x
 
 
-class MHAModelKV(nn.Module):
+class MHAModelOptimizedKV(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.tok_emb = nn.Embedding(cfg["vocab_size"], cfg["emb_dim"])
