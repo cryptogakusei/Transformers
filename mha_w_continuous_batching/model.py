@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from kv_cache import OptimizedKVCache 
+from positional_embedding import RoPE
 
 ### Feedforward box
 class FeedForward(nn.Module):
@@ -16,9 +16,10 @@ class FeedForward(nn.Module):
     def forward(self, x):
         return self.feedforward(x)
 
+
 ### An optimized Multi-head attention box
 class MultiHeadAttention(nn.Module):
-    def __init__(self, d_in, d_out, context_length, dropout, num_heads, max_seq_len_kv_cache, qkv_bias=False):
+    def __init__(self, d_in, d_out, context_length, dropout, num_heads, kvcache_limit, rope_limit, qkv_bias=False):
         super().__init__()
         assert (d_out % num_heads == 0), "d_out must be divisible by num_heads"
 
@@ -30,40 +31,36 @@ class MultiHeadAttention(nn.Module):
         self.W_v = nn.Linear(d_in, d_out, bias=qkv_bias)
         self.out_proj = nn.Linear(d_out, d_out)
         self.dropout = nn.Dropout(dropout)
-        self.register_buffer(
-            'mask', torch.triu(torch.ones(context_length, context_length), diagonal=1)
-            ) # creates an upper triangular matrix
-        self.kv_cache = OptimizedKVCache(context_length, max_seq_len_kv_cache, self.num_heads, self.head_dim)
+        self.rope = RoPE(head_dim=self.head_dim, rope_limit=rope_limit)
+        self.register_buffer('mask', torch.triu(torch.ones(context_length, context_length), diagonal=1)) # creates an upper triangular matrix
+        
 
     def forward(self, x):
-        batch_size, seq_len, d_in = x.shape # batch_size x 1 x d_in
+        batch_size, seq_len, d_in = x.shape # batch_size x seq_len x d_in
 
-        query = self.W_q(x) # batch_size x 1 x d_out
-        key = self.W_k(x) # -- same here --
-        value = self.W_v(x) # -- same here --
+        queries = self.W_q(x) # batch_size x seq_len x d_out
+        keys = self.W_k(x) # -- same here --
+        values = self.W_v(x) # -- same here --
 
         # break the last dimension across heads
-        key = key.view(batch_size, seq_len, self.num_heads, self.head_dim) # batch_size x 1 x num_heads x head_dim
-        value = value.view(batch_size, seq_len, self.num_heads, self.head_dim) # batch_size x 1 x num_heads x head_dim
-        query = query.view(batch_size, seq_len, self.num_heads, self.head_dim) # batch_size x 1 x num_heads x head_dim
+        keys = keys.view(batch_size, seq_len, self.num_heads, self.head_dim) # batch_size x seq_len x num_heads x head_dim
+        values = values.view(batch_size, seq_len, self.num_heads, self.head_dim) # batch_size x seq_len x num_heads x head_dim
+        queries = queries.view(batch_size, seq_len, self.num_heads, self.head_dim) # batch_size x seq_len x num_heads x head_dim
         
         # prepare the matrices for matmul by rearranging dimensions
-        key = key.transpose(1, 2) # batch_size x 1 x num_heads x head_dim ---> # batch_size x num_heads x 1 x head_dim
-        value = value.transpose(1, 2) # batch_size x 1 x num_heads x head_dim ---> # batch_size x num_heads x 1 x head_dim
-        query = query.transpose(1, 2) # batch_size x 1 x num_heads x head_dim ---> # batch_size x num_heads x 1 x head_dim
+        keys = keys.transpose(1, 2) # batch_size x seq_len x num_heads x head_dim ---> # batch_size x num_heads x seq_len x head_dim
+        values = values.transpose(1, 2) # batch_size x seq_len x num_heads x head_dim ---> # batch_size x num_heads x seq_len x head_dim
+        queries = queries.transpose(1, 2) # batch_size x seq_len x num_heads x head_dim ---> # batch_size x num_heads x seq_len x head_dim
+        queries = self.rope.apply_rope(queries) # batch_size x num_heads x seq_len x head_dim
+        keys = self.rope.apply_rope(keys) # batch_size x num_heads x seq_len x head_dim
 
-        # cache in the KV_cache
-        self.kv_cache.cache(key, value)
-
-        # retrieve from the KV cache
-        keys, values = self.kv_cache.get_cache() # both batch_size x num_heads x min(tokens_seen_so_far, context_length) x head_dim
-
-        attention = query @ keys.transpose(2, 3) # batch_size x num_heads x 1 x min(tokens_seen_so_far, context_length)
+        attention = queries @ keys.transpose(2, 3) # batch_size x num_heads x seq_len x seq_len
         attention = attention / keys.shape[-1]**0.5 # -- same here --
+        attention.masked_fill_(self.mask.bool()[:seq_len, :seq_len], -torch.inf) # -- same here --
         attention = torch.softmax(attention, dim=-1) # -- same here --
         attention = self.dropout(attention) # -- same here --
-        output = (attention @ values).transpose(1, 2) # batch_size x num_heads x 1 x head_dim ---> # batch_size x 1 x num_heads x head_dim
-        output = output.contiguous().view(batch_size, seq_len, self.d_out) # batch_size x 1 x d_out
+        output = (attention @ values).transpose(1, 2) # batch_size x num_heads x seq_len x head_dim ---> # batch_size x seq_len x num_heads x head_dim
+        output = output.contiguous().view(batch_size, seq_len, self.d_out) # batch_size x seq_len x d_out
         output = self.out_proj(output)
 
         return output
@@ -78,8 +75,9 @@ class TransformerBlock(nn.Module):
                             d_out=cfg["emb_dim"], 
                             context_length=cfg["context_length"], 
                             dropout=cfg["dropout_rate"], 
-                            num_heads=cfg["num_heads"],
-                            max_seq_len_kv_cache = cfg["max_seq_len_kv_cache"], 
+                            num_heads=cfg["num_heads"], 
+                            rope_limit=cfg["rope_limit"], 
+                            kvcache_limit=cfg["kvcache_limit"],
                             qkv_bias=cfg["qkv_bias"]
                         )
         self.dropout = nn.Dropout(cfg["dropout_rate"])
@@ -88,7 +86,7 @@ class TransformerBlock(nn.Module):
 
     def forward(self, x):
         res = x
-        x = self.layernorm1(x) # batch_size x 1 x hidden_dim
+        x = self.layernorm1(x) # batch_size x seq_len x hidden_dim
         x = self.attention(x) # -- same here --
         x = self.dropout(x) # -- same here --
         x = x + res
@@ -102,42 +100,20 @@ class TransformerBlock(nn.Module):
         return x
 
 
-class MHAModelOptimizedKV(nn.Module):
+class MHAModel(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.tok_emb = nn.Embedding(cfg["vocab_size"], cfg["emb_dim"])
-        self.pos_emb = nn.Embedding(cfg["context_length"], cfg["emb_dim"])
         self.dropout_emb = nn.Dropout(cfg["dropout_rate"])
         self.blocks = nn.Sequential(*[TransformerBlock(cfg) for _ in range(cfg["num_layers"])])
         self.final_layernorm = nn.LayerNorm(cfg["emb_dim"])
         self.output_layer = nn.Linear(cfg["emb_dim"], cfg["vocab_size"])
-        self.tokens_seen = 0
-        self.context_length = cfg["context_length"]
 
     def forward(self, in_idx):
         _, seq_len = in_idx.shape
-        tok_embed = self.tok_emb(in_idx) # batch_size x 1 x emb_dim
-        position = self.tokens_seen % self.context_length        
-        pos_embed = self.pos_emb(torch.tensor([position], device=in_idx.device)) # 1 x emb_dim
-        self.tokens_seen += 1
-
-        x = tok_embed + pos_embed # batch_size x 1 x emb_dim
+        x = self.tok_emb(in_idx) # batch_size x seq_len x emb_dim
         x = self.dropout_emb(x) # -- same here --
         x = self.blocks(x) # -- same here --
         x = self.final_layernorm(x) # -- same here --
-        logits = self.output_layer(x) # batch_size x 1 x vocab_size
+        logits = self.output_layer(x) # batch_size x seq_len x vocab_size
         return logits
-
-
-    def clear_cache(self):
-        self.tokens_seen = 0
-        for block in self.blocks:
-            block.attention.kv_cache.clear_cache()
-
-    def get_total_kv_cache_size(self):
-        total = 0
-        for block in self.blocks:
-            total += block.attention.kv_cache.get_size_bytes()
-        return total
-    
-    

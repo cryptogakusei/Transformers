@@ -1,38 +1,7 @@
 import torch
 import torch.nn as nn
 
-### KV Cache - define it for one per layer
-class KVCache:
-    def __init__(self, context_length):
-        self.K_cache = None
-        self.V_cache = None
-        self.context_length = context_length
-    
-    def cache(self, K_new, V_new):
-        if self.K_cache is None:
-            self.K_cache = K_new # batch_size x num_heads x 1 x head_dim
-            self.V_cache = V_new # batch_size x num_heads x 1 x head_dim
-        else:
-            self.K_cache = torch.cat([self.K_cache, K_new], dim=2) # batch_size x num_heads x min(tokens_seen_so_far, context_length) x head_dim
-            self.V_cache = torch.cat([self.V_cache, V_new], dim=2) # batch_size x num_heads x min(tokens_seen_so_far, context_length) x head_dim
-        
-        if self.K_cache.shape[2] > self.context_length:
-            self.K_cache = self.K_cache[:,:, -self.context_length:, :] # cap at context_length
-            self.V_cache = self.V_cache[:,:, -self.context_length:, :] 
-
-    def get_cache(self):
-        return self.K_cache, self.V_cache 
-    
-    def clear_cache(self):
-        self.K_cache = None
-        self.V_cache = None
-
-    def get_size_bytes(self):
-        if self.K_cache is None:
-            return 0
-        return self.K_cache.element_size() * self.K_cache.nelement() + self.V_cache.element_size() * self.V_cache.nelement()
-    
-
+from kv_cache import KVCache
 
 ### Feedforward box
 class FeedForward(nn.Module):

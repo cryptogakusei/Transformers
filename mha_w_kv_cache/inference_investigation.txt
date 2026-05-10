@@ -1,0 +1,22 @@
+Max new tokens: 300
+Context length: 256
+Device: mps
+
+With optimized KV cache: 2.668s | Cache: 294912.0 KB
+Generated:
+Every effort moves you can make something new and exciting.
+Once upon a time, there was a little girl named Lily. She loved to play outside in the sun. One day, she found a shiny rock on the ground. She picked it up and showed it to her mom.
+
+"Look, Mommy! I found a pretty rock!" Lily said.
+
+"That's a very pretty rock, Lily. But be careful, it might be sharp," her mom replied.
+
+Lily held the rock in her hand and looked at it closely. She saw that it was sharp and it was sharp. She didn't want to hurt it, but her mom told her to be careful.
+
+Later that day, Lily and her mom went to the park to play. They saw a big slide and Lily wanted to go on it. Her mom said, "Be careful, Lily. Don't go too high."
+
+Lily climbed up the ladder and slid down the slide. She felt happy and proud of herself. "I did it, Mommy! I did it!" she said.
+Once upon a time, there was a little girl named Lily. She loved to play outside in the sun. One day, she found a shiny rock. It was a pretty rock that sparkled in the sun. She picked it up and put it in her pocket.
+
+Later that day, Lily went to the park. She saw a big tree. She saw a big tree
+

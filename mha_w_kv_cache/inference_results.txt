@@ -2,7 +2,7 @@ Max new tokens: 500
 Context length: 256
 Device: mps
 
-Without KV cache: 7.806s
+Without KV cache: 7.783s
 Generated:
 Every effort moves you?"
 
@@ -25,7 +25,7 @@ I made a deprecating gesture, he had a curious smile in his eyes.
 
 "Oh, I knew him, I didn't care a straw when I painted; and as he lay there and watched me, the ensuing weeks, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been too, I had been
 
-With KV cache: 4.031s | Cache: 18432.0 KB
+With KV cache: 3.576s | Cache: 18432.0 KB
 Generated:
 Every effort moves you?"
 
@@ -56,7 +56,7 @@ He laughed again, and threw back his glory, he had dropped his painting, I had b
 
 "When he was dead? You
 
-With optimized KV cache: 3.948s | Cache: 294912.0 KB
+With optimized KV cache: 3.503s | Cache: 294912.0 KB
 Generated:
 Every effort moves you?"
 
@@ -87,5 +87,5 @@ He laughed again, and threw back his glory, he had dropped his painting, I had b
 
 "When he was dead? You
 
-Speedup KV vs No KV: 1.94x
-Speedup Optimized KV vs No KV: 1.98x
+Speedup KV vs No KV: 2.18x
+Speedup Optimized KV vs No KV: 2.22x

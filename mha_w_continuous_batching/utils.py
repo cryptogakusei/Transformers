@@ -5,11 +5,10 @@ from matplotlib.ticker import MaxNLocator
 import os
 
 
-
 ### Conversion betwween text and token 
 def text_to_token_ids(text, tokenizer):
     encoded = tokenizer.encode(text, allowed_special={'<|endoftext|>'})
-    encoded_tensor = torch.tensor(encoded).unsqueeze(0) # adding the nominal batch dimension
+    encoded_tensor = torch.tensor(encoded).unsqueeze(0)
     return encoded_tensor
 
 
@@ -101,9 +100,8 @@ def generate_text_simple(model, idx, max_new_tokens, context_size):
 
     return idx
 
-def generate_and_print_sample(model, tokenizer, device, start_context):
+def generate_and_print_sample(model, tokenizer, device, start_context, context_size):
     model.eval()
-    context_size = model.pos_emb.weight.shape[0]
     encoded = text_to_token_ids(start_context, tokenizer).to(device)
     with torch.no_grad():
         token_ids = generate_text_simple(
@@ -120,7 +118,7 @@ def generate_with_kv_cache(model, idx,  max_new_tokens, context_size):
     model.clear_cache()
 
     for i in range(idx.shape[1]):
-        logits = model(idx[:, i:i+1])
+        logits = model(idx[:, i:i+1]) # we are iterating here one token at a time
     logits = logits[:, -1, :]
     probas = torch.softmax(logits, dim=-1) # only for the the first new token generated
     idx_next = torch.argmax(probas,dim=-1, keepdim=True)
@@ -140,7 +138,7 @@ def generate_with_kv_cache(model, idx,  max_new_tokens, context_size):
 ### Train the model
 def train(model, train_loader, val_loader, optimizer, 
                        device, num_epochs, eval_freq, eval_num_batches, 
-                       start_context, tokenizer):
+                       start_context, tokenizer, context_size):
     train_losses, val_losses, track_tokens_seen = [], [], []
     tokens_seen, global_step = 0, -1
 
@@ -164,7 +162,7 @@ def train(model, train_loader, val_loader, optimizer,
                     f"Train loss {train_loss:.3f}, "
                     f"Val loss {val_loss:.3f}"
                 )
-        generate_and_print_sample(model, tokenizer, device, start_context)
+        generate_and_print_sample(model, tokenizer, device, start_context, context_size)
     return train_losses, val_losses, track_tokens_seen
  
 
@@ -184,6 +182,7 @@ def plot_losses(epochs_seen, tokens_seen, train_losses, val_losses):
     os.makedirs("figs", exist_ok=True)
     fig.savefig("figs/losses.png", dpi=150, bbox_inches="tight")
     plt.close()
+
 
 
 

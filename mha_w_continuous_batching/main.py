@@ -11,7 +11,7 @@ from config import MODEL_CONFIG, TRAINING_CONFIG
 from utils import create_dataloader, train, plot_losses, text_to_token_ids, token_ids_to_text, generate_text_simple, generate_with_kv_cache, sync
 from model import MHAModel
 from inference import MHAModelKV
-from inference_with_optimized_kv_cache import MHAModelOptimizedKV
+from inference_w_opt_kv_cache import MHAModelOptimizedKV
 
 torch.manual_seed(123) # initializing randomness
 
@@ -27,12 +27,12 @@ tokenizer = tiktoken.get_encoding("gpt2")
 
 
 ### Preprocessing the input data 
-file_path = "file.txt"
-urllib.request.urlretrieve(TRAINING_CONFIG["url"], file_path)
-with open(file_path, "r", encoding="utf-8") as f:
-    raw_data = f.read()
-# ds = load_dataset(TRAINING_CONFIG["dataset"], split="train[:500000]")
-# raw_data = "\n".join(ds["text"])
+# file_path = "file.txt"
+# urllib.request.urlretrieve(TRAINING_CONFIG["url"], file_path)
+# with open(file_path, "r", encoding="utf-8") as f:
+#     raw_data = f.read()
+ds = load_dataset(TRAINING_CONFIG["dataset"], split="train[:500000]")
+raw_data = "\n".join(ds["text"])
 
 # print #
 total_tokens = len(tokenizer.encode(raw_data))
@@ -87,7 +87,8 @@ train_losses, val_losses, tokens_seen = train(
                                             eval_freq=TRAINING_CONFIG["eval_freq"], 
                                             eval_num_batches=TRAINING_CONFIG["eval_num_batches"],
                                             start_context="Every effort moves you", 
-                                            tokenizer=tokenizer
+                                            tokenizer=tokenizer,
+                                            context_size=MODEL_CONFIG["context_length"]
                                         )
 epochs_tensor = torch.linspace(0, TRAINING_CONFIG["num_epochs"], len(train_losses))
 plot_losses(epochs_tensor, tokens_seen, train_losses, val_losses)
@@ -95,7 +96,7 @@ torch.save(model.state_dict(), "model_weights.pth")
 
 
 prompt = "Every effort moves you"
-token_ids = text_to_token_ids(prompt, tokenizer).to(device) # 1 x seq_len
+token_ids = text_to_token_ids(prompt, tokenizer).to(device)
 max_new_tokens = 500
 
 # Inference without KV cache
