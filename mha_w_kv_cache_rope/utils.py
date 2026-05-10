@@ -118,7 +118,7 @@ def generate_with_kv_cache(model, idx,  max_new_tokens, context_size):
     model.clear_cache()
 
     for i in range(idx.shape[1]):
-        logits = model(idx[:, i:i+1])
+        logits = model(idx[:, i:i+1]) # we are iterating here one token at a time
     logits = logits[:, -1, :]
     probas = torch.softmax(logits, dim=-1) # only for the the first new token generated
     idx_next = torch.argmax(probas,dim=-1, keepdim=True)
@@ -182,3 +182,11 @@ def plot_losses(epochs_seen, tokens_seen, train_losses, val_losses):
     os.makedirs("figs", exist_ok=True)
     fig.savefig("figs/losses.png", dpi=150, bbox_inches="tight")
     plt.close()
+
+
+
+
+### sync function for cuda
+def sync():
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()

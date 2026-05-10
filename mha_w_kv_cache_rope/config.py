@@ -4,13 +4,14 @@ import urllib.request
 # Model configuration
 MODEL_CONFIG = {
     "vocab_size" : 50257,
-    "context_length" : 256,
+    "context_length" : 1024,
     "emb_dim" : 768,
     "num_heads" : 12,
     "num_layers" : 12,
     "dropout_rate" : 0.1,
     "qkv_bias" : False,
-    "max_seq_len_rope" : 4096,
+    "rope_limit" : 4096,
+    "kvcache_limit" : 4096,
  }
 
 # Training configuration

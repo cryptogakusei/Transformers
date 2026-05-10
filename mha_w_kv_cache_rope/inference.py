@@ -2,39 +2,7 @@ import torch
 import torch.nn as nn
 
 from positional_embedding import RoPE
-
-### KV Cache - define it for one per layer
-class KVCache:
-    def __init__(self, context_length):
-        self.K_cache = None
-        self.V_cache = None
-        self.context_length = context_length
-    
-    def cache(self, K_new, V_new):
-        if self.K_cache is None:
-            self.K_cache = K_new # batch_size x num_heads x 1 x head_dim
-            self.V_cache = V_new # batch_size x num_heads x 1 x head_dim
-        else:
-            self.K_cache = torch.cat([self.K_cache, K_new], dim=2) # batch_size x num_heads x min(tokens_seen_so_far, context_length) x head_dim
-            self.V_cache = torch.cat([self.V_cache, V_new], dim=2) # batch_size x num_heads x min(tokens_seen_so_far, context_length) x head_dim
-        
-        if self.K_cache.shape[2] > self.context_length:
-            self.K_cache = self.K_cache[:,:, -self.context_length:, :] # cap at context_length
-            self.V_cache = self.V_cache[:,:, -self.context_length:, :] 
-
-    def get_cache(self):
-        return self.K_cache, self.V_cache 
-    
-    def clear_cache(self):
-        self.K_cache = None
-        self.V_cache = None
-
-    def get_size_bytes(self):
-        if self.K_cache is None:
-            return 0
-        return self.K_cache.element_size() * self.K_cache.nelement() + self.V_cache.element_size() * self.V_cache.nelement()
-    
-
+from kv_cache import KVCache
     
 
 ### Feedforward box
@@ -52,7 +20,7 @@ class FeedForward(nn.Module):
 
 ### An optimized Multi-head attention box
 class MultiHeadAttention(nn.Module):
-    def __init__(self, d_in, d_out, context_length, dropout, num_heads, max_seq_len_rope, qkv_bias=False):
+    def __init__(self, d_in, d_out, context_length, dropout, num_heads, kvcache_limit, rope_limit, qkv_bias=False):
         super().__init__()
         assert (d_out % num_heads == 0), "d_out must be divisible by num_heads"
 
@@ -64,12 +32,10 @@ class MultiHeadAttention(nn.Module):
         self.W_v = nn.Linear(d_in, d_out, bias=qkv_bias)
         self.out_proj = nn.Linear(d_out, d_out)
         self.dropout = nn.Dropout(dropout)
-        self.register_buffer(
-            'mask', torch.triu(torch.ones(context_length, context_length), diagonal=1)
-            ) # creates an upper triangular matrix
+        self.register_buffer('mask', torch.triu(torch.ones(context_length, context_length), diagonal=1)) # creates an upper triangular matrix
         self.kv_cache = KVCache(context_length)
-        self.tokens_seen = 0
-        self.rope = RoPE(head_dim=self.head_dim, max_seq_len=max_seq_len_rope)
+        self.pos = 0 # needed for coutning how many tokens have been seen so as to be able to deduce the position of incoming token
+        self.rope = RoPE(head_dim=self.head_dim, rope_limit=rope_limit)
 
     def forward(self, x):
         batch_size, seq_len, d_in = x.shape # batch_size x 1 x d_in
@@ -87,8 +53,8 @@ class MultiHeadAttention(nn.Module):
         key = key.transpose(1, 2) # batch_size x 1 x num_heads x head_dim ---> # batch_size x num_heads x 1 x head_dim
         value = value.transpose(1, 2) # batch_size x 1 x num_heads x head_dim ---> # batch_size x num_heads x 1 x head_dim
         query = query.transpose(1, 2) # batch_size x 1 x num_heads x head_dim ---> # batch_size x num_heads x 1 x head_dim
-        query = self.rope.apply_rope(query, pos=self.tokens_seen) # batch_size x num_heads x 1 x head_dim
-        key = self.rope.apply_rope(key, pos=self.tokens_seen)  # batch_size x num_heads x 1 x head_dim
+        query = self.rope.apply_rope(query, pos=self.pos) # batch_size x num_heads x 1 x head_dim
+        key = self.rope.apply_rope(key, pos=self.pos)  # batch_size x num_heads x 1 x head_dim
 
         # cache in the KV_cache
         self.kv_cache.cache(key, value)
@@ -104,7 +70,7 @@ class MultiHeadAttention(nn.Module):
         output = output.contiguous().view(batch_size, seq_len, self.d_out) # batch_size x 1 x d_out
         output = self.out_proj(output)
 
-        self.tokens_seen += 1
+        self.pos += 1
 
         return output
 
@@ -119,7 +85,8 @@ class TransformerBlock(nn.Module):
                             context_length=cfg["context_length"], 
                             dropout=cfg["dropout_rate"], 
                             num_heads=cfg["num_heads"],
-                            max_seq_len_rope=cfg["max_seq_len_rope"], 
+                            rope_limit=cfg["rope_limit"], 
+                            kvcache_limit=cfg["kvcache_limit"],
                             qkv_bias=cfg["qkv_bias"],
                         )
         self.dropout = nn.Dropout(cfg["dropout_rate"])
