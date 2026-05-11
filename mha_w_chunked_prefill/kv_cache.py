@@ -11,8 +11,8 @@ class KVCache:
     
     def cache(self, K_new, V_new):
         if self.K_cache is None:
-            self.K_cache = K_new # batch_size x num_heads x 1 x head_dim
-            self.V_cache = V_new # batch_size x num_heads x 1 x head_dim
+            self.K_cache = K_new # batch_size x num_heads x seq_len x head_dim, seq_len = max_num_batched_tokens in chunked_prefill phase
+            self.V_cache = V_new # -- same here --
         else:
             self.K_cache = torch.cat([self.K_cache, K_new], dim=2) # batch_size x num_heads x min(tokens_seen_so_far, context_length) x head_dim
             self.V_cache = torch.cat([self.V_cache, V_new], dim=2) # batch_size x num_heads x min(tokens_seen_so_far, context_length) x head_dim
@@ -37,7 +37,6 @@ class KVCache:
 
 ### KV Cache - define it for one per layer
 class OptimizedKVCache:
-    # CAVEAT: built for batch size of 1 and for inserting 1 new token
     def __init__(self, context_length, num_heads, head_dim, kvcache_limit=4096):
         self.K_cache = torch.empty(1, num_heads, kvcache_limit, head_dim)
         self.V_cache = torch.empty(1, num_heads, kvcache_limit, head_dim)
@@ -46,18 +45,17 @@ class OptimizedKVCache:
         self.kvcache_limit = kvcache_limit
 
     def cache(self, K_new, V_new):
-        # K_new and V_new are assumed to add only one new token in the sequence
-        if self.pos >= self.kvcache_limit:
-            self.K_cache[:,:,:-1,:] = self.K_cache[:,:,1:,:] # the shifting of elements from 1 to max_seq_len_kv_cache-1 positions
-            self.V_cache[:,:,:-1,:] = self.V_cache[:,:,1:,:]
+        seq_len = K_new.shape[2]
+        if self.pos + seq_len >= self.kvcache_limit:
+            self.K_cache[:,:,:-seq_len,:] = self.K_cache[:,:,seq_len:,:] # the shifting for making space
+            self.V_cache[:,:,:-seq_len,:] = self.V_cache[:,:,seq_len:,:]
             self.pos = self.kvcache_limit - 1
-        self.K_cache[:,:,self.pos,:] = K_new.squeeze(2) # dim(K_new) = 1 x num_heads x 1 x head_dim --> 1 x num_heads x head_dim --> insertion to K_cache
-        self.V_cache[:,:,self.pos,:] = V_new.squeeze(2) # -- same as above --
-        self.pos += 1
+        self.K_cache[:,:,self.pos:self.pos + seq_len,:] = K_new # dim(K_new) = 1 x num_heads x seq_len x head_dim --> insertion to K_cache
+        self.V_cache[:,:,self.pos:self.pos + seq_len,:] = V_new # -- same as above --
+        self.pos += seq_len
 
     def get_cache(self):
-        start_pos = max(0, self.pos - self.context_length) # only send back the last context_length -- for orange-to-orange comparison of speedup with non KV cache
-        return self.K_cache[:,:,start_pos:self.pos,:], self.V_cache[:,:,start_pos:self.pos,:] 
+        return self.K_cache, self.V_cache
         
     def clear_cache(self):
         self.K_cache.zero_()

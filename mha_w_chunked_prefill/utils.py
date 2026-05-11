@@ -6,6 +6,10 @@ import os
 
 
 ### Conversion betwween text and token 
+def text_to_token_ids_list_ver(text, tokenizer):
+    encoded = tokenizer.encode(text, allowed_special={'<|endoftext|>'})
+    return encoded
+
 def text_to_token_ids(text, tokenizer):
     encoded = tokenizer.encode(text, allowed_special={'<|endoftext|>'})
     encoded_tensor = torch.tensor(encoded).unsqueeze(0)

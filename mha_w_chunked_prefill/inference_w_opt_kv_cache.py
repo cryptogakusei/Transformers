@@ -20,7 +20,7 @@ class FeedForward(nn.Module):
 
 ### An optimized Multi-head attention box
 class MultiHeadAttention(nn.Module):
-    def __init__(self, d_in, d_out, context_length, dropout, num_heads, kvcache_limit, rope_limit, qkv_bias=False):
+    def __init__(self, d_in, d_out, max_seq_len, dropout, num_heads, kvcache_limit, rope_limit, qkv_bias=False):
         super().__init__()
         assert (d_out % num_heads == 0), "d_out must be divisible by num_heads"
 
@@ -32,8 +32,11 @@ class MultiHeadAttention(nn.Module):
         self.W_v = nn.Linear(d_in, d_out, bias=qkv_bias)
         self.out_proj = nn.Linear(d_out, d_out)
         self.dropout = nn.Dropout(dropout)
-        self.register_buffer('mask', torch.triu(torch.ones(context_length, context_length), diagonal=1)) # creates an upper triangular matrix
-        self.kv_cache = OptimizedKVCache(context_length, self.num_heads, self.head_dim, kvcache_limit=kvcache_limit)
+        self.register_buffer('mask', torch.triu(torch.ones(max_seq_len, max_seq_len), diagonal=1)) # creates an upper triangular matrix
+        self.kv_cache = OptimizedKVCache(context_length=min(kvcache_limit, rope_limit), 
+                                         num_heads=self.num_heads, 
+                                         head_dim=self.head_dim,
+                                         kvcache_limit=kvcache_limit)
         self.pos = 0 # needed for countuing how many tokens have been seen so as to be able to deduce the position of incoming token for RoPE
         self.rope = RoPE(head_dim=self.head_dim, rope_limit=rope_limit)
 
@@ -70,7 +73,7 @@ class MultiHeadAttention(nn.Module):
         output = output.contiguous().view(batch_size, seq_len, self.d_out) # batch_size x 1 x d_out
         output = self.out_proj(output)
 
-        self.pos += 1
+        self.pos += seq_len
 
         return output
 
@@ -82,7 +85,7 @@ class TransformerBlock(nn.Module):
         self.attention = MultiHeadAttention(
                             d_in=cfg["emb_dim"],
                             d_out=cfg["emb_dim"], 
-                            context_length=cfg["context_length"], 
+                            max_seq_len=cfg["max_seq_len"], 
                             dropout=cfg["dropout_rate"], 
                             num_heads=cfg["num_heads"],
                             rope_limit=cfg["rope_limit"], 

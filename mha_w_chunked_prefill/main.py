@@ -7,8 +7,9 @@ import matplotlib.pyplot as plt
 import time
 from datasets import load_dataset
 
-from config import MODEL_CONFIG, TRAINING_CONFIG
+from config import MODEL_CONFIG, TRAINING_CONFIG, INFERENCE_CONFIG
 from utils import create_dataloader, train, plot_losses, text_to_token_ids, token_ids_to_text, generate_text_simple, generate_with_kv_cache, sync
+from chunked_prefill import generate_with_chunked_prefill
 from model import MHAModel
 from inference import MHAModelKV
 from inference_w_opt_kv_cache import MHAModelOptimizedKV
@@ -27,12 +28,12 @@ tokenizer = tiktoken.get_encoding("gpt2")
 
 
 ### Preprocessing the input data 
-# file_path = "file.txt"
-# urllib.request.urlretrieve(TRAINING_CONFIG["url"], file_path)
-# with open(file_path, "r", encoding="utf-8") as f:
-#     raw_data = f.read()
-ds = load_dataset(TRAINING_CONFIG["dataset"], split="train[:500000]")
-raw_data = "\n".join(ds["text"])
+file_path = "file.txt"
+urllib.request.urlretrieve(TRAINING_CONFIG["url"], file_path)
+with open(file_path, "r", encoding="utf-8") as f:
+    raw_data = f.read()
+# ds = load_dataset(TRAINING_CONFIG["dataset"], split="train[:500000]")
+# raw_data = "\n".join(ds["text"])
 
 # print #
 total_tokens = len(tokenizer.encode(raw_data))
@@ -48,8 +49,8 @@ train_loader = create_dataloader(
     tokenizer,
     train_data,
     batch_size=TRAINING_CONFIG["batch_size"],
-    max_length=MODEL_CONFIG["context_length"],
-    stride=MODEL_CONFIG["context_length"],
+    max_length=MODEL_CONFIG["max_seq_len"],
+    stride=MODEL_CONFIG["max_seq_len"],
     drop_last=True,
     shuffle=True,
     num_workers=0
@@ -59,8 +60,8 @@ val_loader = create_dataloader(
     tokenizer,
     val_data,
     batch_size=TRAINING_CONFIG["batch_size"],
-    max_length=MODEL_CONFIG["context_length"],
-    stride=MODEL_CONFIG["context_length"],
+    max_length=MODEL_CONFIG["max_seq_len"],
+    stride=MODEL_CONFIG["max_seq_len"],
     drop_last=True,
     shuffle=True,
     num_workers=0
@@ -88,14 +89,13 @@ train_losses, val_losses, tokens_seen = train(
                                             eval_num_batches=TRAINING_CONFIG["eval_num_batches"],
                                             start_context="Every effort moves you", 
                                             tokenizer=tokenizer,
-                                            context_size=MODEL_CONFIG["context_length"]
+                                            context_size=MODEL_CONFIG["max_seq_len"]
                                         )
 epochs_tensor = torch.linspace(0, TRAINING_CONFIG["num_epochs"], len(train_losses))
 plot_losses(epochs_tensor, tokens_seen, train_losses, val_losses)
 torch.save(model.state_dict(), "model_weights.pth")
 
-
-prompt = "Every effort moves you"
+prompt = raw_data[:2000]
 token_ids = text_to_token_ids(prompt, tokenizer).to(device)
 max_new_tokens = 500
 
@@ -104,7 +104,7 @@ model.eval()
 with torch.no_grad():
     sync()
     start = time.time()
-    output1 = generate_text_simple(model, token_ids, max_new_tokens, MODEL_CONFIG["context_length"])
+    output1 = generate_text_simple(model, token_ids, max_new_tokens, MODEL_CONFIG["max_seq_len"])
     sync()
     end = time.time()
 t1 = end - start
@@ -119,7 +119,7 @@ kv_model.eval()
 with torch.no_grad():
     sync()
     start = time.time()
-    output2 = generate_with_kv_cache(kv_model, token_ids, max_new_tokens, context_size=MODEL_CONFIG["context_length"])
+    output2 = generate_with_chunked_prefill(kv_model, token_ids, max_num_batched_tokens=INFERENCE_CONFIG["max_num_batched_tokens"], max_new_tokens=max_new_tokens)
     sync()
     end = time.time()
 t2 = end - start
@@ -139,7 +139,7 @@ optimized_kv_model.eval()
 with torch.no_grad():
     sync()
     start = time.time()
-    output3 = generate_with_kv_cache(optimized_kv_model, token_ids, max_new_tokens, context_size=MODEL_CONFIG["context_length"])
+    output3 = generate_with_chunked_prefill(kv_model, token_ids, max_num_batched_tokens=INFERENCE_CONFIG["max_num_batched_tokens"], max_new_tokens=max_new_tokens)
     sync()
     end = time.time()
 t3 = end - start
@@ -148,12 +148,12 @@ size3 = optimized_kv_model.get_total_kv_cache_size()
 print(f"With optimized KV cache: {t3:.3f}s | Cache: {size3/1024:.1f} KB")
 optimized_kv_model.clear_cache()
 
-print(f"\nSpeedup KV vs No KV: {t1/t2:.2f}x")
-print(f"Speedup Optimized KV vs No KV: {t1/t3:.2f}x")
+# print(f"\nSpeedup KV vs No KV: {t1/t2:.2f}x")
+# print(f"Speedup Optimized KV vs No KV: {t1/t3:.2f}x")
 
 with open("inference_results.txt", "w") as f:
     f.write(f"Max new tokens: {max_new_tokens}\n")
-    f.write(f"Context length: {MODEL_CONFIG['context_length']}\n")
+    f.write(f"Context length: {MODEL_CONFIG['max_seq_len']}\n")
     f.write(f"Device: {device}\n\n")
     
     f.write(f"Without KV cache: {t1:.3f}s\n")
@@ -165,7 +165,7 @@ with open("inference_results.txt", "w") as f:
     f.write(f"With optimized KV cache: {t3:.3f}s | Cache: {size3/1024:.1f} KB\n")
     f.write(f"Generated:\n{text3}\n\n")
     
-    f.write(f"Speedup KV vs No KV: {t1/t2:.2f}x\n")
-    f.write(f"Speedup Optimized KV vs No KV: {t1/t3:.2f}x\n")
+    # f.write(f"Speedup KV vs No KV: {t1/t2:.2f}x\n")
+    # f.write(f"Speedup Optimized KV vs No KV: {t1/t3:.2f}x\n")
 
 print("Results saved to inference_results.txt")
