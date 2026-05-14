@@ -7,7 +7,7 @@ import urllib.request
 
 from config import MODEL_CONFIG, TRAINING_CONFIG, INFERENCE_CONFIG
 
-# MOST of the code in THIS FILE has been taken from someone else's repo and I modified it a bit for my work. 
+# MOST of the code in THIS FILE (ONLY) has been taken from someone else's codebase and I modified it a bit for my work. 
 # I didn't come up the logic by myself.
 
 file_path = "file.txt"
