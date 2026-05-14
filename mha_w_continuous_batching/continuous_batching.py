@@ -5,7 +5,8 @@ from kv_cache import KVCache
 
 
 class ActiveRequest:
-    def __init__(self, context_length, num_layers, prompt_token_id, max_new_tokens):
+    def __init__(self, context_length, num_layers, prompt_token_id, max_new_tokens, request_id=None):
+        self.request_id = request_id
         self.prompt_token_id = prompt_token_id
         self.kvcaches = [KVCache(context_length) for _ in range(num_layers)]
         self.pos = 0 # useful for both RoPE cslculation and for 
@@ -24,8 +25,8 @@ class KVPool:
         self.active_requests = []
         self.max_num_batched_tokens = max_num_batched_tokens
 
-    def allocate_cache(self, context_length, num_layers, prompt_token_id, max_new_tokens):
-        request = ActiveRequest(context_length, num_layers, prompt_token_id, max_new_tokens)
+    def allocate_cache(self, context_length, num_layers, prompt_token_id, max_new_tokens, request_id=None):
+        request = ActiveRequest(context_length, num_layers, prompt_token_id, max_new_tokens, request_id)
         self.active_requests.append(request)
     
 

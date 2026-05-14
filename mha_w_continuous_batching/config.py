@@ -36,5 +36,5 @@ TRAINING_CONFIG = {
 
 # Inference configuration
 INFERENCE_CONFIG = {
-    "max_num_batched_tokens" : 16, # to be used for continuous batching
+    "max_num_batched_tokens" : 8, # to be used for continuous batching
 }

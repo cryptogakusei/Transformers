@@ -9,7 +9,6 @@ from datasets import load_dataset
 
 from config import MODEL_CONFIG, TRAINING_CONFIG, INFERENCE_CONFIG
 from utils import create_dataloader, train, plot_losses, text_to_token_ids, token_ids_to_text, generate_text_simple, generate_with_kv_cache, sync
-from chunked_prefill import generate_with_chunked_prefill
 from model import MHAModel
 from inference_for_continuous_batching import MHAModelContinuousBatching
 from continuous_batching import KVPool
