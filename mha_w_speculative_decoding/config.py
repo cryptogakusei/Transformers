@@ -36,5 +36,8 @@ TRAINING_CONFIG = {
 
 # Inference configuration
 INFERENCE_CONFIG = {
-    "max_num_batched_tokens" : 32, # to be used for continuous batching
+    "max_num_batched_tokens" : 16, # to be used for continuous batching
+    "num_pages" : 50000, 
+    "tokens_per_page" : 4,
+    "num_speculations" : 4,
 }
