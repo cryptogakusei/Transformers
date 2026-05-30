@@ -22,7 +22,7 @@ def main():
     w = torch.randn(args.size, args.size, device=device, dtype=dtype)
     b = torch.randn(args.size, args.size, device=device, dtype=dtype)
 
-    wait, warmup, active, repeat = 0, 0, 20, 1
+    wait, warmup, active, repeat = 0, 1, 20, 1
 
 
     def fn(x, w, b):
