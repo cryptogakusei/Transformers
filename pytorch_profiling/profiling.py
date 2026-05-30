@@ -48,7 +48,7 @@ def main():
     trace_path = os.path.join(args.trace_dir, f"{tag}.json")
 
     # describing the scheduler for running the profiler
-    schedule = torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=1)
+    schedule = torch.profiler.schedule(wait=0, warmup=0, active=3, repeat=1)
     with torch.profiler.profile(
         activities=[
             torch.profiler.ProfilerActivity.CPU,
