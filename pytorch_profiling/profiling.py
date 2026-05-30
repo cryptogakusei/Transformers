@@ -22,6 +22,9 @@ def main():
     w = torch.randn(args.size, args.size, device=device, dtype=dtype)
     b = torch.randn(args.size, args.size, device=device, dtype=dtype)
 
+    wait, warmup, active, repeat = 0, 0, 20, 1
+
+
     def fn(x, w, b):
         return torch.add(torch.matmul(x, w), b)
     
@@ -48,7 +51,7 @@ def main():
     trace_path = os.path.join(args.trace_dir, f"{tag}.json")
 
     # describing the scheduler for running the profiler
-    schedule = torch.profiler.schedule(wait=0, warmup=0, active=20, repeat=1)
+    schedule = torch.profiler.schedule(wait=wait, warmup=warmup, active=active, repeat=repeat)
     with torch.profiler.profile(
         activities=[
             torch.profiler.ProfilerActivity.CPU,
@@ -59,7 +62,7 @@ def main():
         profile_memory=False,
         with_stack=False,
     ) as prof:
-        for _ in range(5):
+        for _ in range(wait + warmup + active):
             step()
             prof.step()
 
