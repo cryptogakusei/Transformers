@@ -154,7 +154,7 @@ async def inference_loop():
                 request.generated_token_id.shape[-1] if request.generated_token_id is not None else 0
             )
 
-        # run speculative decoding (draft -> target verify -> reject/accept -> cleanup)
+        # run speculative decoding
         speculative_decoding_manager.run(inference_seq, partition, active_requests, num_layers)
 
         # update request status and stream results
